@@ -13,6 +13,7 @@ from scipy.stats.stats import pearsonr
 from tensorflow.keras.layers import Dense, Conv1D, MaxPool1D, Flatten, Dropout, LSTM, GRU, Bidirectional, Input, concatenate
 from tensorflow.keras.utils import to_categorical
 
+
 def onehot_encoding(string):
     transtab = str.maketrans('ACGT','0123')
     string= str(string)
@@ -70,14 +71,20 @@ def get_data(path, min_read=2000,add_RNAplfold =True):
     with open(path+  "/seq/val-seq") as source:
         X_val =  np.array(list(map(one_hot_enc, source)))
         y_val = pd.read_csv(path + '/csv_data/val_data.csv', usecols=['rsr']).to_numpy()
-    w_val = pd.read_csv(path + '/csv_data/val_data.csv', usecols=['c_read']).to_numpy() +\
+        w_val = pd.read_csv(path + '/csv_data/val_data.csv', usecols=['c_read']).to_numpy() +\
             pd.read_csv(path + '/csv_data/val_data.csv', usecols=['t_read']).to_numpy()
+        chr_val = pd.read_csv(path + '/csv_data/val_data.csv', usecols=['chromosome']).to_numpy()
+        pos_val = pd.read_csv(path + '/csv_data/val_data.csv', usecols=['position']).to_numpy()
+        strand_val = pd.read_csv(path + '/csv_data/val_data.csv', usecols=['strand']).to_numpy()
     # test
     with open(path+  "/seq/test-seq") as source:
         X_test = np.array(list(map(one_hot_enc, source)))
         y_test = pd.read_csv(path + '/csv_data/test_data.csv', usecols=['rsr']).to_numpy()
-    w_test = pd.read_csv(path + '/csv_data/test_data.csv', usecols=['c_read']).to_numpy() + \
-             pd.read_csv(path + '/csv_data/test_data.csv', usecols=['t_read']).to_numpy()
+        w_test = pd.read_csv(path + '/csv_data/test_data.csv', usecols=['c_read']).to_numpy() + \
+                 pd.read_csv(path + '/csv_data/test_data.csv', usecols=['t_read']).to_numpy()
+        chr_test = pd.read_csv(path + '/csv_data/test_data.csv', usecols=['chromosome']).to_numpy()
+        pos_test = pd.read_csv(path + '/csv_data/test_data.csv', usecols=['position']).to_numpy()
+        strand_test = pd.read_csv(path + '/csv_data/test_data.csv', usecols=['strand']).to_numpy()
 
     # set val min read
     ids = np.argwhere(w_val > min_read)[:, 0]
@@ -95,12 +102,48 @@ def get_data(path, min_read=2000,add_RNAplfold =True):
             d = str(strand_train[i])[2:-2]
             e = ')_lunp\_clean'
             plfold_name = a + '_' + b + '-' + c + '(' + d + e
-            with open("./plfold_files/" + plfold_name) as source:
+            with open(path + "/train_plfold/" + plfold_name) as source:
                 pl_train = np.array(list(source))
+            pl_train = pl_train.astype(float)
+            #pl_train1 = pd.read_csv(path + '/train_plfold/' + plfold_name).to_numpy()
             temp = X_train[i]
             temp = np.column_stack((temp, pl_train))
             X_new.append(temp)
-        X_new = np.array(X_new)
+        X_train = np.array(X_new)
+        X_new = []
+        for i in range(len(X_val)):
+            plfold_name = ""
+            a = str(chr_val[i])[2:-2]
+            b = str(pos_val[i] - 140)[1:-1]
+            c = str(pos_val[i] + 110)[1:-1]
+            d = str(strand_val[i])[2:-2]
+            e = ')_lunp\_clean'
+            plfold_name = a + '_' + b + '-' + c + '(' + d + e
+            with open(path + "/val_plfold/" + plfold_name) as source:
+                pl_val = np.array(list(source))
+            pl_val = pl_val.astype(float)
+            #pl_train = pd.read_csv(path + '/val_plfold/' + plfold_name).to_numpy()
+            temp = X_val[i]
+            temp = np.column_stack((temp, pl_val))
+            X_new.append(temp)
+        X_val = np.array(X_new)
+        X_new = []
+        for i in range(len(X_test)):
+            plfold_name = ""
+            a = str(chr_test[i])[2:-2]
+            b = str(pos_test[i] - 140)[1:-1]
+            c = str(pos_test[i] + 110)[1:-1]
+            d = str(strand_test[i])[2:-2]
+            e = ')_lunp\_clean'
+            plfold_name = a + '_' + b + '-' + c + '(' + d + e
+            with open(path + "/test_plfold/" + plfold_name) as source:
+                pl_test = np.array(list(source))
+            pl_test = pl_test.astype(float)
+            #pl_train = pd.read_csv(path + '/test_plfold/' + plfold_name).to_numpy()
+            temp = X_test[i]
+            temp = np.column_stack((temp, pl_test))
+            X_new.append(temp)
+        X_test = np.array(X_new)
 
     # scale_labels
     y_train = np.log(y_train)
@@ -139,9 +182,11 @@ ITER      = 1000
 
 
 if Cloud_run :
-    runidx = "maor_parmas_seed_scan_2"
+    runidx = "ofer_parmas_seed_scan_1"
+    #runidx = input()
     iterations = ITER
-    path = "/home/u110379/RG4_Proj/rg4_data"
+    path = "/home/u93513/V1/rg4_data"
+    path = "./rg4_data"
     VERBOSE = 0
 else:
     runidx = "debug"
@@ -149,56 +194,64 @@ else:
     path = "./rg4_data"
     VERBOSE = 1
 
-train, test, validation = get_data(path,add_RNAplfold=False)
+train, test, validation = get_data(path,add_RNAplfold=True)
 
 for i in range(iterations) :
 ### Random initilization
 
     # Initial Values -- Person 0.7034
-    # INPUT_SIZE       = 60
-    # FILTER           = 88
-    # KERNEL_SIZE      = 8
-    # POOLING          = 1
-    # POOL_SIZE        = 4
-    # DENCE_1          = 52
-    # DENCE_2          = 40
-    # ACTIVATION_1     = 'relu'
-    # ACTIVATION_2     = 'relu'
-    # DROPOUT_1        = 0.3
-    # DROPOUT_2        = 0.1
-    # TF_SEED          = 9
-    # EPOCH            = 10
-    # BATCH_SIZE       = 64
-    # CONV_PADDING     = "valid"
-
-    # Maors Params : person = 0.657
-    INPUT_SIZE       = 100
-    FILTER     = 32
-    KERNEL_SIZE= 42
-    POOLING = 1
-    POOL_SIZE = 45
-    DENCE_1 = 64
-    DENCE_2 = 16
-    ACTIVATION_1 = 'relu'
-    ACTIVATION_2 = 'relu'
+    INPUT_SIZE       = 60
+    FILTER           = 88
+    KERNEL_SIZE      = 8
+    POOLING          = 1
+    POOL_SIZE        = 4
+    DENCE_1          = 52
+    DENCE_2          = 40
+    ACTIVATION_1     = 'relu'
+    ACTIVATION_2     = 'relu'
     DROPOUT_1        = 0.3
     DROPOUT_2        = 0.1
-    TF_SEED          = i
+    TF_SEED          = 9
     EPOCH            = 10
     BATCH_SIZE       = 64
     CONV_PADDING     = "valid"
 
-# Maors params 2
-
-    # INPUT_SIZE = 140
-    # FILTER = 128
-    # KERNEL_SIZE = 5
-    # POOLING = 7
+    # Maors Params : person = 0.657
+    # INPUT_SIZE       = 100
+    # FILTER     = 32
+    # KERNEL_SIZE= 42
+    # POOLING = 1
     # POOL_SIZE = 45
-    # DENCE_1 = 128
-    # DENCE_2 = 32
+    # DENCE_1 = 64
+    # DENCE_2 = 16
     # ACTIVATION_1 = 'relu'
     # ACTIVATION_2 = 'relu'
+    # DROPOUT_1        = 0.3
+    # DROPOUT_2        = 0.1
+    # TF_SEED          = i
+    # EPOCH            = 10
+    # BATCH_SIZE       = 64
+    # CONV_PADDING     = "valid"
+
+    if Cloud_run :
+        sizes = [60, 80, 90, 100]
+        INPUT_SIZE = sizes[np.random.randint(0, 3)]
+        FILTER = np.random.randint(8, 12) * 8
+        KERNEL_SIZE = np.random.randint(1, INPUT_SIZE / 16 + 1) * 4
+        POOLING = 1
+        POOL_SIZE = np.random.randint(1, 10)*4
+        DENCE_1 = np.random.randint(6, 16) * 4
+        DENCE_2 = np.random.randint(4, 16) * 4
+        activation = ['relu', 'sigmoid', 'relu']
+        ACTIVATION_1 = activation[np.random.randint(0, 3)]  # 67% relu ,33% sigmoid
+        ACTIVATION_2 = 'relu'
+        ROPOUT_1 = np.random.randint(0,8)*0.1
+        DROPOUT_2 = np.random.randint(0,8)*0.1
+        TF_SEED = np.random.randint(1000)
+        EPOCH = np.random.randint(3,30)
+        BATCH_SIZE = np.random.randint(1,10)*8
+        CONV_PADDING = "valid"
+
 
 
     # INPUT_SIZE           = np.random.randint(4,11)*10
@@ -312,6 +365,6 @@ for i in range(iterations) :
 if Cloud_run :
     filename_csv = "out_results_csv" + "_" + str(runidx)
     filename_excel   = "out_results_excel" + "_" + str(runidx) + ".xlsx"
-    Results_pd.to_excel(filename_excel)
+    #Results_pd.to_excel(filename_excel)
     Results_pd.to_csv(filename_csv)
     print("Done Exporting CSV and Excel Result Outputs")
